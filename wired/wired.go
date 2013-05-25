@@ -92,47 +92,6 @@ func (this *Connection) sendClientInformation() {
 	this.readData()
 }
 
-// Sends a users login information to the Wired server.
-//
-// The password must be converted to a SHA1 digest before sending it to this function.
-func (this *Connection) sendLogin(user, password string) {
-	fmt.Println("Sending login information...")
-
-	// Send the user login information to the Wired server.
-	parameters := map[string]string{
-		"wired.user.login":    user,
-		"wired.user.password": password,
-	}
-
-	this.sendTransaction("wired.send_login", parameters)
-	this.readData()
-}
-
-func (this *Connection) setNick(nick string) {
-	fmt.Println("Attempting to change nick.")
-
-	parameters := map[string]string{
-		"wired.user.nick": nick,
-	}
-
-	this.sendTransaction("wired.user.set_nick", parameters)
-	this.readData()
-}
-
-func (this *Connection) joinChannel(channel string) {
-	fmt.Printf("Attempting to join channel %s.\n", channel)
-
-	// TODO: Reset the user list for this channel.
-
-	// Attempt to join the channel.
-	parameters := map[string]string{
-		"wired.chat.id": channel,
-	}
-
-	this.sendTransaction("wired.chat.join_chat", parameters)
-	this.readData()
-}
-
 func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
 	// Begin translating the transaction message into XML.
 	generatedXML := `<?xml version="1.0" encoding="UTF-8"?>`
@@ -159,6 +118,47 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 		fmt.Fprintf(os.Stderr, "Error writing data to socket: %s", err.Error())
 		os.Exit(1)
 	}
+}
+
+// Sends a users login information to the Wired server.
+//
+// The password must be converted to a SHA1 digest before sending it to this function.
+func (this *Connection) SendLogin(user, password string) {
+	fmt.Println("Sending login information...")
+
+	// Send the user login information to the Wired server.
+	parameters := map[string]string{
+		"wired.user.login":    user,
+		"wired.user.password": password,
+	}
+
+	this.sendTransaction("wired.send_login", parameters)
+	this.readData()
+}
+
+func (this *Connection) SetNick(nick string) {
+	fmt.Println("Attempting to change nick.")
+
+	parameters := map[string]string{
+		"wired.user.nick": nick,
+	}
+
+	this.sendTransaction("wired.user.set_nick", parameters)
+	this.readData()
+}
+
+func (this *Connection) JoinChannel(channel string) {
+	fmt.Printf("Attempting to join channel %s.\n", channel)
+
+	// TODO: Reset the user list for this channel.
+
+	// Attempt to join the channel.
+	parameters := map[string]string{
+		"wired.chat.id": channel,
+	}
+
+	this.sendTransaction("wired.chat.join_chat", parameters)
+	this.readData()
 }
 
 func (this *Connection) ConnectToServer(server string, port int) {
@@ -199,12 +199,12 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	// If it's not, we need to end the cancel the connection.
 	this.sendClientInformation()
 
-	this.sendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+	this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
 
 	// TODO: We need to check and see if the login information was correct.
-	this.setNick("Wired APNS")
+	this.SetNick("Wired APNS")
 
-	this.joinChannel("1")
+	this.JoinChannel("1")
 
 	// Close the socket connection.
 	this.socket.Close()
