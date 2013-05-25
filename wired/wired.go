@@ -18,7 +18,7 @@ var (
 // in the Wired specification file for each connection to speed things up later.
 func init() {
 	// Attempt to read in the Wired specification file.
-	file, err := ioutil.ReadFile("WiredSpec_2.0b55.xml")
+	file, err := ioutil.ReadFile("wired/WiredSpec_2.0b55.xml")
 
 	// If there's no specification file then we can't continue.
 	if err != nil {
