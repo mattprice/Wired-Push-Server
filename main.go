@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"runtime"
 	"time"
 )
 
@@ -203,7 +202,7 @@ func (this *WiredConnection) connectToServer(server string, port int) {
 	this.sendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
 
 	// TODO: We need to check and see if the login information was correct.
-	this.setNick("Wired Push Server")
+	this.setNick("Wired APNS")
 
 	this.joinChannel("1")
 
