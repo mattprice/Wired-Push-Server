@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
-	"os"
 	"time"
 )
 
@@ -20,10 +20,9 @@ func init() {
 	// Attempt to read in the Wired specification file.
 	file, err := ioutil.ReadFile("wired/WiredSpec_2.0b55.xml")
 
-	// If there's no specification file then we can't continue.
+	// Wired requires the specifications to connect, so we can't continue if an error occurs.
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		log.Fatalf("Error loading Wired specifications: %s", err.Error())
 	}
 
 	WIRED_SPEC = string(file)
@@ -41,8 +40,7 @@ func (this *Connection) readData() {
 	result, err := bufio.NewReader(this.socket).ReadString('\r')
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		log.Panicf("Error reading data from socket: %s", err.Error())
 	} else {
 		fmt.Println(string(result))
 	}
@@ -113,10 +111,8 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	// Write the data to the socket.
 	_, err := this.socket.Write([]byte(generatedXML))
 
-	// TODO: We need to find something better than this fatal error.
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing data to socket: %s", err.Error())
-		os.Exit(1)
+		log.Panicf("Error writing data to socket: %s", err.Error())
 	}
 }
 
@@ -173,11 +169,8 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	socket, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", server, port), timeout)
 	this.socket = socket
 
-	// If the connection failed, log the error and exit the program.
-	// TODO: This isn't a longterm solution but it will help us get off the ground.
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Connection error: %s", err.Error())
-		os.Exit(1)
+		log.Panicf("Connection error: %s\n", err.Error())
 	}
 
 	// Start sending Wired connection info.
@@ -204,7 +197,7 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	// TODO: We need to check and see if the login information was correct.
 	this.SetNick("Wired APNS")
 
-	this.JoinChannel("1")
+	// this.JoinChannel("1")
 
 	// Close the socket connection.
 	this.socket.Close()
