@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -22,7 +21,7 @@ func init() {
 	file, err := ioutil.ReadFile("wired/WiredSpec_2.0b55.xml")
 	if err != nil {
 		// We can't continue since Wired requires the specifications to connect.
-		log.Fatalf("Error loading Wired specifications: %s", err.Error())
+		log.Fatalf("Error loading Wired specifications: %v", err)
 	}
 
 	WIRED_SPEC = string(file)
@@ -32,36 +31,6 @@ type Connection struct {
 	socket     net.Conn
 	serverHost string
 	serverPort int
-}
-
-func (this *Connection) readData() {
-	fmt.Println("Attempting to read data from the socket.")
-
-	// Attempt to read data from the socket.
-	data, err := bufio.NewReader(this.socket).ReadString('\r')
-	if err != nil {
-		log.Panicf("Error reading data from socket: %s", err.Error())
-	}
-
-	// Decode the XML document.
-	// NewDecoder() requires we pass it an io.Reader, which strings.NewReader() satisfies.
-	reader := strings.NewReader(data)
-	doc := xml.NewDecoder(reader)
-
-	// Loop through each XML token until we have a message name.
-	for {
-		token, err := doc.Token()
-		if err != nil {
-			log.Panicf("Error parsing token: %s", err.Error())
-		}
-
-		if element, ok := token.(xml.StartElement); ok {
-			if element.Name.Local == "message" {
-				fmt.Println(string(element.Attr[1].Value))
-				break
-			}
-		}
-	}
 }
 
 func (this *Connection) sendAcknowledgement() {
@@ -129,7 +98,7 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	_, err := this.socket.Write([]byte(generatedXML))
 
 	if err != nil {
-		log.Panicf("Error writing data to socket: %s", err.Error())
+		log.Panicf("Error writing data to socket: %v", err)
 	}
 }
 
@@ -185,7 +154,7 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	this.socket = socket
 
 	if err != nil {
-		log.Panicf("Connection error: %s\n", err.Error())
+		log.Panicf("Connection error: %v\n", err)
 	}
 
 	// Start sending Wired connection info.
@@ -220,4 +189,38 @@ func (this *Connection) ConnectToServer(server string, port int) {
 
 	// Close the socket connection.
 	this.socket.Close()
+}
+
+func (this *Connection) readData() {
+	fmt.Println("Attempting to read data from the socket.")
+
+	type P7Field struct {
+		Name  string `xml:"name,attr"`
+		Value string `xml:",innerxml"`
+	}
+
+	type P7Message struct {
+		// XMLName xml.Name `xml:"Person"`
+		Name   string    `xml:"name,attr"`
+		Fields []P7Field `xml:"field"`
+	}
+
+	// Attempt to read data from the socket.
+	data, err := bufio.NewReader(this.socket).ReadString('\r')
+	if err != nil {
+		log.Panicf("Error reading data from socket: %v", err)
+	}
+
+	// Decode the XML document.
+	message := new(P7Message)
+	err = xml.Unmarshal([]byte(data), &message)
+	if err != nil {
+		log.Printf("Error decoding XML document: %v", err)
+		return
+	}
+
+	fmt.Printf("Name: %q\n", message.Name)
+	for _, f := range message.Fields {
+		fmt.Printf("%q => %q\n", f.Name, f.Value)
+	}
 }
