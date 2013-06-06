@@ -2,10 +2,12 @@ package wired
 
 import (
 	"bufio"
+	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -15,13 +17,11 @@ var (
 
 // There are a few I/O operations we should perform while the server is starting so
 // that they aren't repeated for each connection we receive. For instance, reading
-// in the Wired specification file for each connection to speed things up later.
+// in the Wired specification file to speed things up.
 func init() {
-	// Attempt to read in the Wired specification file.
 	file, err := ioutil.ReadFile("wired/WiredSpec_2.0b55.xml")
-
-	// Wired requires the specifications to connect, so we can't continue if an error occurs.
 	if err != nil {
+		// We can't continue since Wired requires the specifications to connect.
 		log.Fatalf("Error loading Wired specifications: %s", err.Error())
 	}
 
@@ -37,14 +37,31 @@ type Connection struct {
 func (this *Connection) readData() {
 	fmt.Println("Attempting to read data from the socket.")
 
-	result, err := bufio.NewReader(this.socket).ReadString('\r')
-
+	// Attempt to read data from the socket.
+	data, err := bufio.NewReader(this.socket).ReadString('\r')
 	if err != nil {
 		log.Panicf("Error reading data from socket: %s", err.Error())
-	} else {
-		fmt.Println(string(result))
 	}
 
+	// Decode the XML document.
+	// NewDecoder() requires we pass it an io.Reader, which strings.NewReader() satisfies.
+	reader := strings.NewReader(data)
+	doc := xml.NewDecoder(reader)
+
+	// Loop through each XML token until we have a message name.
+	for {
+		token, err := doc.Token()
+		if err != nil {
+			log.Panicf("Error parsing token: %s", err.Error())
+		}
+
+		if element, ok := token.(xml.StartElement); ok {
+			if element.Name.Local == "message" {
+				fmt.Println(string(element.Attr[1].Value))
+				break
+			}
+		}
+	}
 }
 
 func (this *Connection) sendAcknowledgement() {
@@ -65,7 +82,7 @@ func (this *Connection) sendCompatibilityCheck() {
 		"p7.compatibility_check.specification": WIRED_SPEC,
 	}
 	this.sendTransaction("p7.compatibility_check.specification", parameters)
-	this.readData()
+	go this.readData()
 }
 
 // Sends information about the Wired client to the server.
@@ -87,7 +104,7 @@ func (this *Connection) sendClientInformation() {
 	}
 
 	this.sendTransaction("wired.client_info", parameters)
-	this.readData()
+	go this.readData()
 }
 
 func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
@@ -129,7 +146,7 @@ func (this *Connection) SendLogin(user, password string) {
 	}
 
 	this.sendTransaction("wired.send_login", parameters)
-	this.readData()
+	go this.readData()
 }
 
 func (this *Connection) SetNick(nick string) {
@@ -140,13 +157,11 @@ func (this *Connection) SetNick(nick string) {
 	}
 
 	this.sendTransaction("wired.user.set_nick", parameters)
-	this.readData()
+	go this.readData()
 }
 
 func (this *Connection) JoinChannel(channel string) {
 	fmt.Printf("Attempting to join channel %s.\n", channel)
-
-	// TODO: Reset the user list for this channel.
 
 	// Attempt to join the channel.
 	parameters := map[string]string{
@@ -154,7 +169,7 @@ func (this *Connection) JoinChannel(channel string) {
 	}
 
 	this.sendTransaction("wired.chat.join_chat", parameters)
-	this.readData()
+	go this.readData()
 }
 
 func (this *Connection) ConnectToServer(server string, port int) {
@@ -181,23 +196,27 @@ func (this *Connection) ConnectToServer(server string, port int) {
 		"p7.handshake.protocol.version": "2.0",
 	}
 	this.sendTransaction("p7.handshake.client_handshake", parameters)
-	this.readData()
+	go this.readData()
 
-	this.sendAcknowledgement()
+	// this.sendAcknowledgement()
 
 	// TODO: Make sure "p7.handshake.compatibility_check" is 1 before sending the compatibility check.
-	this.sendCompatibilityCheck()
+	// this.sendCompatibilityCheck()
 
 	// TODO: Make sure "p7.compatibility_check.status" is 1.
 	// If it's not, we need to end the cancel the connection.
-	this.sendClientInformation()
+	// this.sendClientInformation()
 
-	this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+	// this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
 
 	// TODO: We need to check and see if the login information was correct.
-	this.SetNick("Wired APNS")
+	// this.SetNick("Wired APNS")
 
 	// this.JoinChannel("1")
+
+	// Wait until all goroutines have finished.
+	var input string
+	fmt.Scanln(&input)
 
 	// Close the socket connection.
 	this.socket.Close()
