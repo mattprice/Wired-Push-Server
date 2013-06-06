@@ -10,9 +10,7 @@ import (
 	"time"
 )
 
-var (
-	WIRED_SPEC string
-)
+var WIRED_SPEC string
 
 // There are a few I/O operations we should perform while the server is starting so
 // that they aren't repeated for each connection we receive. For instance, reading
@@ -27,16 +25,100 @@ func init() {
 	WIRED_SPEC = string(file)
 }
 
-type Connection struct {
-	socket     net.Conn
-	serverHost string
-	serverPort int
+func (this *Connection) ConnectToServer(server string, port int) {
+	timeout, _ := time.ParseDuration("15s")
+
+	// Store the connection info so that we can reconnect later if necessary.
+	this.serverHost = server
+	this.serverPort = port
+
+	// Attempt a socket connection to the server.
+	fmt.Println("Beginning socket connection...")
+	socket, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", server, port), timeout)
+	this.socket = socket
+
+	if err != nil {
+		log.Panicf("Connection error: %v\n", err)
+	}
+
+	// Start sending Wired connection info.
+	fmt.Println("Sending Wired handshake...")
+	parameters := map[string]string{
+		"p7.handshake.version":          "1.0",
+		"p7.handshake.protocol.name":    "Wired",
+		"p7.handshake.protocol.version": "2.0",
+	}
+	this.sendTransaction("p7.handshake.client_handshake", parameters)
+	go this.readData()
+
+	// Wait until all goroutines have finished.
+	var input string
+	fmt.Scanln(&input)
+
+	// Close the socket connection.
+	this.socket.Close()
+}
+
+// Sends a users login information to the Wired server.
+//
+// The password must be converted to a SHA1 digest before sending it to this function.
+func (this *Connection) SendLogin(user, password string) {
+	fmt.Println("Sending login information...")
+
+	// Send the user login information to the Wired server.
+	parameters := map[string]string{
+		"wired.user.login":    user,
+		"wired.user.password": password,
+	}
+
+	this.sendTransaction("wired.send_login", parameters)
+	go this.readData()
+}
+
+func (this *Connection) SetNick(nick string) {
+	fmt.Println("Attempting to change nick.")
+
+	parameters := map[string]string{
+		"wired.user.nick": nick,
+	}
+
+	this.sendTransaction("wired.user.set_nick", parameters)
+	go this.readData()
+}
+
+func (this *Connection) SetStatus(nick string) {
+	fmt.Println("Attempting to change status.")
+
+	parameters := map[string]string{
+		"wired.user.status": nick,
+	}
+
+	this.sendTransaction("wired.user.set_status", parameters)
+	go this.readData()
+}
+
+func (this *Connection) JoinChannel(channel string) {
+	fmt.Printf("Attempting to join channel %s.\n", channel)
+
+	// Attempt to join the channel.
+	parameters := map[string]string{
+		"wired.chat.id": channel,
+	}
+
+	this.sendTransaction("wired.chat.join_chat", parameters)
+	go this.readData()
 }
 
 func (this *Connection) sendAcknowledgement() {
 	fmt.Println("Sending acknowledgement...")
 
 	this.sendTransaction("p7.handshake.acknowledge")
+}
+
+type Connection struct {
+	socket     net.Conn
+	serverHost string
+	serverPort int
 }
 
 //  Responds to a compatibility check from the server.
@@ -92,8 +174,6 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	// Line break is the end message signal for the socket.
 	generatedXML += "</p7:message>\r\n"
 
-	// fmt.Println(generatedXML)
-
 	// Write the data to the socket.
 	_, err := this.socket.Write([]byte(generatedXML))
 
@@ -102,107 +182,17 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	}
 }
 
-// Sends a users login information to the Wired server.
-//
-// The password must be converted to a SHA1 digest before sending it to this function.
-func (this *Connection) SendLogin(user, password string) {
-	fmt.Println("Sending login information...")
-
-	// Send the user login information to the Wired server.
-	parameters := map[string]string{
-		"wired.user.login":    user,
-		"wired.user.password": password,
-	}
-
-	this.sendTransaction("wired.send_login", parameters)
-	go this.readData()
-}
-
-func (this *Connection) SetNick(nick string) {
-	fmt.Println("Attempting to change nick.")
-
-	parameters := map[string]string{
-		"wired.user.nick": nick,
-	}
-
-	this.sendTransaction("wired.user.set_nick", parameters)
-	go this.readData()
-}
-
-func (this *Connection) JoinChannel(channel string) {
-	fmt.Printf("Attempting to join channel %s.\n", channel)
-
-	// Attempt to join the channel.
-	parameters := map[string]string{
-		"wired.chat.id": channel,
-	}
-
-	this.sendTransaction("wired.chat.join_chat", parameters)
-	go this.readData()
-}
-
-func (this *Connection) ConnectToServer(server string, port int) {
-	timeout, _ := time.ParseDuration("15s")
-
-	// Store the connection info so that we can reconnect later if necessary.
-	this.serverHost = server
-	this.serverPort = port
-
-	// Attempt a socket connection to the server.
-	fmt.Println("Beginning socket connection...")
-	socket, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", server, port), timeout)
-	this.socket = socket
-
-	if err != nil {
-		log.Panicf("Connection error: %v\n", err)
-	}
-
-	// Start sending Wired connection info.
-	fmt.Println("Sending Wired handshake...")
-	parameters := map[string]string{
-		"p7.handshake.version":          "1.0",
-		"p7.handshake.protocol.name":    "Wired",
-		"p7.handshake.protocol.version": "2.0",
-	}
-	this.sendTransaction("p7.handshake.client_handshake", parameters)
-	go this.readData()
-
-	// this.sendAcknowledgement()
-
-	// TODO: Make sure "p7.handshake.compatibility_check" is 1 before sending the compatibility check.
-	// this.sendCompatibilityCheck()
-
-	// TODO: Make sure "p7.compatibility_check.status" is 1.
-	// If it's not, we need to end the cancel the connection.
-	// this.sendClientInformation()
-
-	// this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
-
-	// TODO: We need to check and see if the login information was correct.
-	// this.SetNick("Wired APNS")
-
-	// this.JoinChannel("1")
-
-	// Wait until all goroutines have finished.
-	var input string
-	fmt.Scanln(&input)
-
-	// Close the socket connection.
-	this.socket.Close()
-}
-
 func (this *Connection) readData() {
-	fmt.Println("Attempting to read data from the socket.")
+	// fmt.Println("Attempting to read data from the socket.")
 
-	type P7Field struct {
+	type p7Field struct {
 		Name  string `xml:"name,attr"`
 		Value string `xml:",innerxml"`
 	}
 
-	type P7Message struct {
-		// XMLName xml.Name `xml:"Person"`
+	type p7Message struct {
 		Name   string    `xml:"name,attr"`
-		Fields []P7Field `xml:"field"`
+		Fields []p7Field `xml:"field"`
 	}
 
 	// Attempt to read data from the socket.
@@ -212,15 +202,59 @@ func (this *Connection) readData() {
 	}
 
 	// Decode the XML document.
-	message := new(P7Message)
+	message := new(p7Message)
 	err = xml.Unmarshal([]byte(data), &message)
 	if err != nil {
 		log.Printf("Error decoding XML document: %v", err)
 		return
 	}
 
-	fmt.Printf("Name: %q\n", message.Name)
-	for _, f := range message.Fields {
-		fmt.Printf("%q => %q\n", f.Name, f.Value)
+	// fmt.Printf("Name: %q\n", message.Name)
+	// for _, field := range message.Fields {
+	// 	fmt.Printf("%q => %q\n", field.Name, field.Value)
+	// }
+
+	// Server Handshake
+	if message.Name == "p7.handshake.server_handshake" {
+		fmt.Println("Received handshake.")
+
+		go this.sendAcknowledgement()
+
+		for _, field := range message.Fields {
+			if field.Name == "p7.handshake.compatibility_check" {
+				if field.Value == "1" {
+					go this.sendCompatibilityCheck()
+				} else {
+					go this.sendClientInformation()
+				}
+			}
+		}
+	} else if message.Name == "p7.compatibility_check.status" {
+		fmt.Println("Received compatibility status.")
+
+		for _, field := range message.Fields {
+			if field.Name == "p7.compatibility_check.status" {
+				if field.Value == "1" {
+					go this.sendClientInformation()
+				} else {
+					// TODO: Panic will crash the entire server right now.
+					// We need to do some defer()'s and recover()'s in the main goroutine
+					// so that only this connection closes itself.
+					log.Panic("Compatibility mismatch.")
+				}
+			}
+		}
+	} else if message.Name == "wired.server_info" {
+		// We don't need to store server info, but if the APNS is reconnecting by itself,
+		// then this is where we need to start logging in again.
+		go this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+
+		// TODO: We need to check and see if the login information was correct.
+		// TODO: These are run in separate goroutines. What if SendLogin() isn't done yet?
+		go this.SetNick("Octavia")
+		go this.SetStatus("Wired APNS")
+
+		// TODO: These are run in separate goroutines. What if the Nick and Status aren't set yet?
+		go this.JoinChannel("1")
 	}
 }
