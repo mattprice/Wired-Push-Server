@@ -86,11 +86,11 @@ func (this *Connection) SetNick(nick string) {
 	go this.readData()
 }
 
-func (this *Connection) SetStatus(nick string) {
+func (this *Connection) SetStatus(status string) {
 	fmt.Println("Attempting to change status.")
 
 	parameters := map[string]string{
-		"wired.user.status": nick,
+		"wired.user.status": status,
 	}
 
 	this.sendTransaction("wired.user.set_status", parameters)
@@ -247,14 +247,14 @@ func (this *Connection) readData() {
 	} else if message.Name == "wired.server_info" {
 		// We don't need to store server info, but if the APNS is reconnecting by itself,
 		// then this is where we need to start logging in again.
-		go this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+		go func() {
+			this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
 
-		// TODO: We need to check and see if the login information was correct.
-		// TODO: These are run in separate goroutines. What if SendLogin() isn't done yet?
-		go this.SetNick("Octavia")
-		go this.SetStatus("Wired APNS")
+			// TODO: We need to check and see if the login information was correct.
+			this.SetNick("Applejack")
+			this.SetStatus("Wired APNs Test")
 
-		// TODO: These are run in separate goroutines. What if the Nick and Status aren't set yet?
-		go this.JoinChannel("1")
+			// this.JoinChannel("1")
+		}()
 	}
 }
