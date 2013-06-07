@@ -281,7 +281,7 @@ func (this *Connection) readData() {
 				kT4G2mtuX3dG3ocm7c2CiI7h1lHvuXfXwsJyf7GI8LhzWxUwEGFYbUfA+DYTuKtUEoS3
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
 
-			// this.JoinChannel("1")
+			this.JoinChannel("1")
 		}()
 	}
 }
