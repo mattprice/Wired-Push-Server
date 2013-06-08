@@ -39,7 +39,7 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	this.serverPort = port
 
 	// Attempt a socket connection to the server.
-	fmt.Println("Beginning socket connection...")
+	log.Println("Beginning socket connection...")
 	socket, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", server, port), timeout)
 	this.socket = socket
 
@@ -48,7 +48,7 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	}
 
 	// Start sending Wired connection info.
-	fmt.Println("Sending Wired handshake...")
+	log.Println("Sending Wired handshake...")
 	parameters := map[string]string{
 		"p7.handshake.version":          "1.0",
 		"p7.handshake.protocol.name":    "Wired",
@@ -69,7 +69,7 @@ func (this *Connection) Disconnect() {
 //
 // The password must be converted to a SHA1 digest before sending it to this function.
 func (this *Connection) SendLogin(user, password string) {
-	fmt.Println("Sending login information...")
+	log.Println("Sending login information...")
 
 	// Send the user login information to the Wired server.
 	parameters := map[string]string{
@@ -81,7 +81,7 @@ func (this *Connection) SendLogin(user, password string) {
 }
 
 func (this *Connection) SetNick(nick string) {
-	fmt.Println("Attempting to change nick.")
+	log.Println("Attempting to change nick...")
 
 	parameters := map[string]string{
 		"wired.user.nick": nick,
@@ -91,7 +91,7 @@ func (this *Connection) SetNick(nick string) {
 }
 
 func (this *Connection) SetStatus(status string) {
-	fmt.Println("Attempting to change status.")
+	log.Println("Attempting to change status...")
 
 	parameters := map[string]string{
 		"wired.user.status": status,
@@ -101,7 +101,7 @@ func (this *Connection) SetStatus(status string) {
 }
 
 func (this *Connection) SetIcon(icon string) {
-	fmt.Println("Attempting to change icon.")
+	log.Println("Attempting to change icon...")
 
 	parameters := map[string]string{
 		"wired.user.icon": icon,
@@ -111,7 +111,7 @@ func (this *Connection) SetIcon(icon string) {
 }
 
 func (this *Connection) JoinChannel(channel string) {
-	fmt.Printf("Attempting to join channel %s.\n", channel)
+	log.Printf("Attempting to join channel %s...\n", channel)
 
 	// Attempt to join the channel.
 	parameters := map[string]string{
@@ -122,13 +122,13 @@ func (this *Connection) JoinChannel(channel string) {
 }
 
 func (this *Connection) sendAcknowledgement() {
-	fmt.Println("Sending acknowledgement...")
+	log.Println("Sending acknowledgement...")
 
 	this.sendTransaction("p7.handshake.acknowledge")
 }
 
 func (this *Connection) sendPingReply() {
-	fmt.Println("Attempting to send ping reply...")
+	// log.Println("Attempting to send ping reply...")
 
 	this.sendTransaction("wired.ping")
 }
@@ -139,7 +139,7 @@ func (this *Connection) sendPingReply() {
 //  certain characters be encoded before sending. To save processing time the XML
 //  should be pre-encoded. To save bandwidth the documentation lines should be removed.
 func (this *Connection) sendCompatibilityCheck() {
-	fmt.Println("Sending compatibility check...")
+	log.Println("Sending compatibility check...")
 
 	parameters := map[string]string{
 		"p7.compatibility_check.specification": WIRED_SPEC,
@@ -153,7 +153,7 @@ func (this *Connection) sendCompatibilityCheck() {
 // In the future, this should report the same information as the Wired version
 // that's connecting to the Push server.
 func (this *Connection) sendClientInformation() {
-	fmt.Println("Sending client information...")
+	log.Println("Sending client information...")
 
 	parameters := map[string]string{
 		"wired.info.application.name":    "Wired Client",
@@ -200,7 +200,7 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 // to another Goroutine for processing.
 func (this *Connection) readData() {
 	for {
-		// fmt.Println("Attempting to read data from the socket.")
+		// log.Println("Attempting to read data from the socket.")
 
 		data, _ := bufio.NewReader(this.socket).ReadBytes('\r')
 		go this.processData(&data)
@@ -228,7 +228,7 @@ func (this *Connection) processData(data *[]byte) {
 
 	// Server Handshake
 	if message.Name == "p7.handshake.server_handshake" {
-		fmt.Println("Received handshake.")
+		log.Println("Received handshake.")
 
 		go this.sendAcknowledgement()
 
@@ -242,7 +242,7 @@ func (this *Connection) processData(data *[]byte) {
 			}
 		}
 	} else if message.Name == "p7.compatibility_check.status" {
-		fmt.Println("Received compatibility status.")
+		log.Println("Received compatibility status.")
 
 		for _, field := range message.Fields {
 			if field.Name == "p7.compatibility_check.status" {
@@ -257,7 +257,7 @@ func (this *Connection) processData(data *[]byte) {
 			}
 		}
 	} else if message.Name == "wired.server_info" {
-		fmt.Println("Received server info.")
+		log.Println("Received server info.")
 
 		// We don't need to store server info, but if the APNS is reconnecting by itself,
 		// then this is where we need to start logging in again.
@@ -283,16 +283,19 @@ func (this *Connection) processData(data *[]byte) {
 				S1gaHeMEhg2BHZN12BTwO7ZzYhtAUXbV3GQ94Nkh59QqQQhdyWxCbvTGz2MUVGuUdLeV
 				kT4G2mtuX3dG3ocm7c2CiI7h1lHvuXfXwsJyf7GI8LhzWxUwEGFYbUfA+DYTuKtUEoS3
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
-			this.JoinChannel("1")
+			// this.JoinChannel("1")
 		}()
+	} else if message.Name == "wired.login" {
+		log.Println("Login was successful.")
+
 	} else if message.Name == "wired.send_ping" {
-		fmt.Println("Received ping request.")
+		// log.Println("Received ping request.")
 
 		go this.sendPingReply()
 	} else {
-		// fmt.Printf("%q\n", message.Name)
+		// log.Printf("%q\n", message.Name)
 		// for _, field := range message.Fields {
-		// 	fmt.Printf("  %q => %q\n", field.Name, field.Value)
+		// 	log.Printf("  %q => %q\n", field.Name, field.Value)
 		// }
 	}
 }
