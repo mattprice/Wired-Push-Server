@@ -25,6 +25,12 @@ func init() {
 	WIRED_SPEC = string(file)
 }
 
+type Connection struct {
+	socket     net.Conn
+	serverHost string
+	serverPort int
+}
+
 func (this *Connection) ConnectToServer(server string, port int) {
 	timeout, _ := time.ParseDuration("15s")
 
@@ -126,10 +132,10 @@ func (this *Connection) sendAcknowledgement() {
 	this.sendTransaction("p7.handshake.acknowledge")
 }
 
-type Connection struct {
-	socket     net.Conn
-	serverHost string
-	serverPort int
+func (this *Connection) sendPingReply() {
+	fmt.Println("Attempting to send ping reply...")
+
+	this.sendTransaction("wired.ping")
 }
 
 //  Responds to a compatibility check from the server.
@@ -193,8 +199,12 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	}
 }
 
+func (this *Connection) readDataAgain() {
+	this.readData()
+	go this.readDataAgain()
+}
+
 func (this *Connection) readData() {
-	// fmt.Println("Attempting to read data from the socket.")
 
 	type p7Field struct {
 		Name  string `xml:"name,attr"`
@@ -219,11 +229,6 @@ func (this *Connection) readData() {
 		log.Printf("Error decoding XML document: %v", err)
 		return
 	}
-
-	// fmt.Printf("Name: %q\n", message.Name)
-	// for _, field := range message.Fields {
-	// 	fmt.Printf("%q => %q\n", field.Name, field.Value)
-	// }
 
 	// Server Handshake
 	if message.Name == "p7.handshake.server_handshake" {
@@ -256,6 +261,8 @@ func (this *Connection) readData() {
 			}
 		}
 	} else if message.Name == "wired.server_info" {
+		fmt.Println("Received server info.")
+
 		// We don't need to store server info, but if the APNS is reconnecting by itself,
 		// then this is where we need to start logging in again.
 		go func() {
@@ -282,6 +289,16 @@ func (this *Connection) readData() {
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
 
 			this.JoinChannel("1")
+			this.readDataAgain()
 		}()
+	} else if message.Name == "wired.send_ping" {
+		fmt.Println("Received ping request.")
+
+		go this.sendPingReply()
+	} else {
+		fmt.Printf("%q\n", message.Name)
+		for _, field := range message.Fields {
+			fmt.Printf("  %q => %q\n", field.Name, field.Value)
+		}
 	}
 }
