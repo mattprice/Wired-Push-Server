@@ -55,12 +55,12 @@ func (this *Connection) ConnectToServer(server string, port int) {
 		"p7.handshake.protocol.version": "2.0",
 	}
 	this.sendTransaction("p7.handshake.client_handshake", parameters)
+
+	// Start listening for server responses.
 	go this.readData()
+}
 
-	// Wait until all goroutines have finished.
-	var input string
-	fmt.Scanln(&input)
-
+func (this *Connection) Disconnect() {
 	// Close the socket connection.
 	this.socket.Close()
 }
@@ -78,7 +78,6 @@ func (this *Connection) SendLogin(user, password string) {
 	}
 
 	this.sendTransaction("wired.send_login", parameters)
-	go this.readData()
 }
 
 func (this *Connection) SetNick(nick string) {
@@ -89,7 +88,6 @@ func (this *Connection) SetNick(nick string) {
 	}
 
 	this.sendTransaction("wired.user.set_nick", parameters)
-	go this.readData()
 }
 
 func (this *Connection) SetStatus(status string) {
@@ -100,7 +98,6 @@ func (this *Connection) SetStatus(status string) {
 	}
 
 	this.sendTransaction("wired.user.set_status", parameters)
-	go this.readData()
 }
 
 func (this *Connection) SetIcon(icon string) {
@@ -111,7 +108,6 @@ func (this *Connection) SetIcon(icon string) {
 	}
 
 	this.sendTransaction("wired.user.set_icon", parameters)
-	go this.readData()
 }
 
 func (this *Connection) JoinChannel(channel string) {
@@ -123,7 +119,6 @@ func (this *Connection) JoinChannel(channel string) {
 	}
 
 	this.sendTransaction("wired.chat.join_chat", parameters)
-	go this.readData()
 }
 
 func (this *Connection) sendAcknowledgement() {
@@ -150,7 +145,6 @@ func (this *Connection) sendCompatibilityCheck() {
 		"p7.compatibility_check.specification": WIRED_SPEC,
 	}
 	this.sendTransaction("p7.compatibility_check.specification", parameters)
-	go this.readData()
 }
 
 // Sends information about the Wired client to the server.
@@ -172,7 +166,6 @@ func (this *Connection) sendClientInformation() {
 	}
 
 	this.sendTransaction("wired.client_info", parameters)
-	go this.readData()
 }
 
 func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
@@ -199,13 +192,22 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	}
 }
 
-func (this *Connection) readDataAgain() {
-	this.readData()
-	go this.readDataAgain()
+// Reads data from the socket and then passes it off for processing.
+//
+// Until the socket disconnects, we could receive data from the Wired server at
+// any time. To make sure we don't miss any messages, readData will loop forever
+// in its own Goroutine until it recieves data and then immediatley pass it off
+// to another Goroutine for processing.
+func (this *Connection) readData() {
+	for {
+		// fmt.Println("Attempting to read data from the socket.")
+
+		data, _ := bufio.NewReader(this.socket).ReadBytes('\r')
+		go this.processData(&data)
+	}
 }
 
-func (this *Connection) readData() {
-
+func (this *Connection) processData(data *[]byte) {
 	type p7Field struct {
 		Name  string `xml:"name,attr"`
 		Value string `xml:",innerxml"`
@@ -216,15 +218,9 @@ func (this *Connection) readData() {
 		Fields []p7Field `xml:"field"`
 	}
 
-	// Attempt to read data from the socket.
-	data, err := bufio.NewReader(this.socket).ReadString('\r')
-	if err != nil {
-		log.Panicf("Error reading data from socket: %v", err)
-	}
-
 	// Decode the XML document.
 	message := new(p7Message)
-	err = xml.Unmarshal([]byte(data), &message)
+	err := xml.Unmarshal(*data, &message)
 	if err != nil {
 		log.Printf("Error decoding XML document: %v", err)
 		return
@@ -254,8 +250,8 @@ func (this *Connection) readData() {
 					go this.sendClientInformation()
 				} else {
 					// TODO: Panic will crash the entire server right now.
-					// We need to do some defer()'s and recover()'s in the main goroutine
-					// so that only this connection closes itself.
+					// We need to do some defer()'s and recover()'s in the main Goroutine
+					// so that only this Connection closes.
 					log.Panic("Compatibility mismatch.")
 				}
 			}
@@ -287,18 +283,16 @@ func (this *Connection) readData() {
 				S1gaHeMEhg2BHZN12BTwO7ZzYhtAUXbV3GQ94Nkh59QqQQhdyWxCbvTGz2MUVGuUdLeV
 				kT4G2mtuX3dG3ocm7c2CiI7h1lHvuXfXwsJyf7GI8LhzWxUwEGFYbUfA+DYTuKtUEoS3
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
-
 			this.JoinChannel("1")
-			this.readDataAgain()
 		}()
 	} else if message.Name == "wired.send_ping" {
 		fmt.Println("Received ping request.")
 
 		go this.sendPingReply()
 	} else {
-		fmt.Printf("%q\n", message.Name)
-		for _, field := range message.Fields {
-			fmt.Printf("  %q => %q\n", field.Name, field.Value)
-		}
+		// fmt.Printf("%q\n", message.Name)
+		// for _, field := range message.Fields {
+		// 	fmt.Printf("  %q => %q\n", field.Name, field.Value)
+		// }
 	}
 }
