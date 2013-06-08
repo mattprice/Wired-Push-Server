@@ -226,8 +226,8 @@ func (this *Connection) processData(data *[]byte) {
 		return
 	}
 
-	// Server Handshake
 	if message.Name == "p7.handshake.server_handshake" {
+		// Server Handshake
 		log.Println("Received handshake.")
 
 		go this.sendAcknowledgement()
@@ -242,6 +242,7 @@ func (this *Connection) processData(data *[]byte) {
 			}
 		}
 	} else if message.Name == "p7.compatibility_check.status" {
+		// Compatibility Check
 		log.Println("Received compatibility status.")
 
 		for _, field := range message.Fields {
@@ -257,14 +258,16 @@ func (this *Connection) processData(data *[]byte) {
 			}
 		}
 	} else if message.Name == "wired.server_info" {
+		// Server Info
 		log.Println("Received server info.")
 
-		// We don't need to store server info, but if the APNS is reconnecting by itself,
-		// then this is where we need to start logging in again.
-		go func() {
-			this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+		// If the APNS is connecting by itself then we need to log in.
+		go this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+	} else if message.Name == "wired.login" {
+		// Login Successful
+		log.Println("Login was successful.")
 
-			// TODO: We need to check and see if the login information was correct.
+		go func() {
 			this.SetNick("Applejack")
 			this.SetStatus("Wired APNs Test")
 			this.SetIcon(`iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAV1BMVEW6X
@@ -283,12 +286,11 @@ func (this *Connection) processData(data *[]byte) {
 				S1gaHeMEhg2BHZN12BTwO7ZzYhtAUXbV3GQ94Nkh59QqQQhdyWxCbvTGz2MUVGuUdLeV
 				kT4G2mtuX3dG3ocm7c2CiI7h1lHvuXfXwsJyf7GI8LhzWxUwEGFYbUfA+DYTuKtUEoS3
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
+
 			// this.JoinChannel("1")
 		}()
-	} else if message.Name == "wired.login" {
-		log.Println("Login was successful.")
-
 	} else if message.Name == "wired.send_ping" {
+		// Ping Request
 		// log.Println("Received ping request.")
 
 		go this.sendPingReply()
