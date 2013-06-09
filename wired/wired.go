@@ -26,11 +26,15 @@ func init() {
 }
 
 type Connection struct {
-	socket     net.Conn
+	socket net.Conn
+
 	serverHost string
 	serverPort int
+
+	userID string
 }
 
+// Connects to the specified server and port.
 func (this *Connection) ConnectToServer(server string, port int) {
 	timeout, _ := time.ParseDuration("15s")
 
@@ -60,12 +64,22 @@ func (this *Connection) ConnectToServer(server string, port int) {
 	go this.readData()
 }
 
+// Disconnects from the server.
 func (this *Connection) Disconnect() {
+	log.Println("Disconnecting from server...")
+
+	// Alert the Wired server that we're disconnecting.
+	parameters := map[string]string{
+		"wired.user.id":                 this.userID,
+		"wired.user.disconnect_message": "",
+	}
+	this.sendTransaction("wired.user.disconnect_user", parameters)
+
 	// Close the socket connection.
 	this.socket.Close()
 }
 
-// Sends a users login information to the Wired server.
+// Sends a user's login information to the Wired server.
 //
 // The password must be converted to a SHA1 digest before sending it to this function.
 func (this *Connection) SendLogin(user, password string) {
@@ -76,40 +90,42 @@ func (this *Connection) SendLogin(user, password string) {
 		"wired.user.login":    user,
 		"wired.user.password": password,
 	}
-
 	this.sendTransaction("wired.send_login", parameters)
 }
 
+// Sets a user's nickname.
 func (this *Connection) SetNick(nick string) {
 	log.Println("Attempting to change nick...")
 
 	parameters := map[string]string{
 		"wired.user.nick": nick,
 	}
-
 	this.sendTransaction("wired.user.set_nick", parameters)
 }
 
+// Sets a user's status.
 func (this *Connection) SetStatus(status string) {
 	log.Println("Attempting to change status...")
 
 	parameters := map[string]string{
 		"wired.user.status": status,
 	}
-
 	this.sendTransaction("wired.user.set_status", parameters)
 }
 
+// Sets a user's avatar.
 func (this *Connection) SetIcon(icon string) {
 	log.Println("Attempting to change icon...")
 
 	parameters := map[string]string{
 		"wired.user.icon": icon,
 	}
-
 	this.sendTransaction("wired.user.set_icon", parameters)
 }
 
+// Joins the specified channel.
+//
+// Under most circumstances users will only ever join channel 1, the public channel.
 func (this *Connection) JoinChannel(channel string) {
 	log.Printf("Attempting to join channel %s...\n", channel)
 
@@ -117,16 +133,17 @@ func (this *Connection) JoinChannel(channel string) {
 	parameters := map[string]string{
 		"wired.chat.id": channel,
 	}
-
 	this.sendTransaction("wired.chat.join_chat", parameters)
 }
 
+// Sends an acknowledgement to the Wired server.
 func (this *Connection) sendAcknowledgement() {
 	log.Println("Sending acknowledgement...")
 
 	this.sendTransaction("p7.handshake.acknowledge")
 }
 
+// Replies to a ping request from the Wired server.
 func (this *Connection) sendPingReply() {
 	// log.Println("Attempting to send ping reply...")
 
@@ -164,10 +181,13 @@ func (this *Connection) sendClientInformation() {
 		"wired.info.arch":                "x86_64",
 		"wired.info.supports_rsrc":       "false",
 	}
-
 	this.sendTransaction("wired.client_info", parameters)
 }
 
+// Sends a transaction to the Wired server.
+//
+// All transactions required a transaction name, but the parameters map is optional.
+// Only the first parameters map is read. Multiple parameter maps will be ignored.
 func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
 	// Begin translating the transaction message into XML.
 	generatedXML := `<?xml version="1.0" encoding="UTF-8"?>`
@@ -188,7 +208,7 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	_, err := this.socket.Write([]byte(generatedXML))
 
 	if err != nil {
-		log.Panicf("Error writing data to socket: %v", err)
+		log.Println("Error writing data to socket: %v", err)
 	}
 }
 
@@ -202,7 +222,10 @@ func (this *Connection) readData() {
 	for {
 		// log.Println("Attempting to read data from the socket.")
 
+		// The only time err != nil is when we can't find the delimeter,
+		// so just ignore any error that ReadBytes returns.
 		data, _ := bufio.NewReader(this.socket).ReadBytes('\r')
+
 		go this.processData(&data)
 	}
 }
@@ -267,6 +290,12 @@ func (this *Connection) processData(data *[]byte) {
 		// Login Successful
 		log.Println("Login was successful.")
 
+		for _, field := range message.Fields {
+			if field.Name == "wired.user.id" {
+				this.userID = field.Value
+			}
+		}
+
 		go func() {
 			this.SetNick("Applejack")
 			this.SetStatus("Wired APNs Test")
@@ -287,12 +316,10 @@ func (this *Connection) processData(data *[]byte) {
 				kT4G2mtuX3dG3ocm7c2CiI7h1lHvuXfXwsJyf7GI8LhzWxUwEGFYbUfA+DYTuKtUEoS3
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
 
-			// this.JoinChannel("1")
+			this.JoinChannel("1")
 		}()
 	} else if message.Name == "wired.send_ping" {
 		// Ping Request
-		// log.Println("Received ping request.")
-
 		go this.sendPingReply()
 	} else if message.Name == "wired.error" {
 		// Wired Errors
