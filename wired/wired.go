@@ -294,6 +294,17 @@ func (this *Connection) processData(data *[]byte) {
 		// log.Println("Received ping request.")
 
 		go this.sendPingReply()
+	} else if message.Name == "wired.error" {
+		// Wired Errors
+		for _, field := range message.Fields {
+			if field.Value == "wired.error.login_failed" {
+				log.Panicln("Login failed:", "Username or password is incorrect.")
+			} else if field.Value == "wired.banned" {
+				log.Panicln("Login failed:", "User is banned from this server.")
+			} else {
+				log.Println("*** ERROR:", field.Value, "***")
+			}
+		}
 	} else {
 		// log.Printf("%q\n", message.Name)
 		// for _, field := range message.Fields {
