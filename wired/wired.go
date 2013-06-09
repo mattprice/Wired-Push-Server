@@ -222,9 +222,11 @@ func (this *Connection) readData() {
 	for {
 		// log.Println("Attempting to read data from the socket.")
 
-		// The only time err != nil is when we can't find the delimeter,
-		// so just ignore any error that ReadBytes returns.
-		data, _ := bufio.NewReader(this.socket).ReadBytes('\r')
+		data, err := bufio.NewReader(this.socket).ReadBytes('\r')
+		if err != nil {
+			log.Println("Error reading data from socket: %v", err)
+			continue
+		}
 
 		go this.processData(&data)
 	}
@@ -245,7 +247,7 @@ func (this *Connection) processData(data *[]byte) {
 	message := new(p7Message)
 	err := xml.Unmarshal(*data, &message)
 	if err != nil {
-		log.Printf("Error decoding XML document: %v", err)
+		log.Printf("Error decoding XML document: %v\n%v", err, string(*data))
 		return
 	}
 
