@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -223,8 +224,17 @@ func (this *Connection) readData() {
 		// log.Println("Attempting to read data from the socket.")
 
 		data, err := bufio.NewReader(this.socket).ReadBytes('\r')
+
+		// Catch io.EOF, which happens when the server has disconnected.
+		// TODO: This should attempt to reconnect to the server.
+		if err == io.EOF {
+			log.Panicln("Server disconnected unexpectedly.")
+			return
+		}
+
+		// Catch any other miscellaneous errors.
 		if err != nil {
-			log.Println("Error reading data from socket: %v", err)
+			log.Printf("Error reading data from socket: %v", err)
 			continue
 		}
 
