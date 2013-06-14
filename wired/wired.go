@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	WIRED_SPEC string
+	specs map[string]string = make(map[string]string)
 )
 
 const (
@@ -24,13 +24,23 @@ const (
 // that they aren't repeated for each connection we receive. For instance, reading
 // in the Wired specification file to speed things up.
 func init() {
-	file, err := ioutil.ReadFile("wired/WiredSpec_2.0b55.xml")
-	if err != nil {
-		// We can't continue since Wired requires the specifications to connect.
-		log.Fatalf("Error loading Wired specifications: %v", err)
+	supportedVersions := []string{
+		"2.0b51",
+		"2.0b53",
+		"2.0b55",
 	}
 
-	WIRED_SPEC = string(file)
+	for _, version := range supportedVersions {
+		path := fmt.Sprintf("wired/WiredSpec_%s.xml", version)
+
+		file, err := ioutil.ReadFile(path)
+		if err != nil {
+			// We can't continue since Wired requires the specifications to connect.
+			log.Fatalf("Error loading Wired specifications: %v", err)
+		}
+
+		specs[version] = string(file)
+	}
 }
 
 type Connection struct {
@@ -40,7 +50,8 @@ type Connection struct {
 	Host string
 	Port int
 
-	userID string
+	version string
+	userID  string
 }
 
 // Connects to the specified server and port.
@@ -164,7 +175,7 @@ func (this *Connection) sendCompatibilityCheck() {
 	log.Println("Sending compatibility check...")
 
 	parameters := map[string]string{
-		"p7.compatibility_check.specification": WIRED_SPEC,
+		"p7.compatibility_check.specification": specs[this.version],
 	}
 	this.sendTransaction("p7.compatibility_check.specification", parameters)
 }
@@ -271,14 +282,24 @@ func (this *Connection) processData(data *[]byte) {
 
 		go this.sendAcknowledgement()
 
+		// Just incase the server sends fields out of order, we don't send the
+		// compatibility check until after processing everything, when we're certain
+		// we have the protocol version figured out.
+		sendCheck := false
 		for _, field := range message.Fields {
-			if field.Name == "p7.handshake.compatibility_check" {
+			if field.Name == "p7.handshake.protocol.version" {
+				this.version = field.Value
+			} else if field.Name == "p7.handshake.compatibility_check" {
 				if field.Value == "1" {
-					go this.sendCompatibilityCheck()
-				} else {
-					go this.sendClientInformation()
+					sendCheck = true
 				}
 			}
+		}
+
+		if sendCheck {
+			go this.sendCompatibilityCheck()
+		} else {
+			go this.sendClientInformation()
 		}
 	} else if message.Name == "p7.compatibility_check.status" {
 		// Compatibility Check
