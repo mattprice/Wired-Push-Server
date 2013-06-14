@@ -11,7 +11,14 @@ import (
 	"time"
 )
 
-var WIRED_SPEC string
+var (
+	WIRED_SPEC string
+)
+
+const (
+	Disconnected = iota
+	Connected
+)
 
 // There are a few I/O operations we should perform while the server is starting so
 // that they aren't repeated for each connection we receive. For instance, reading
@@ -28,25 +35,21 @@ func init() {
 
 type Connection struct {
 	socket net.Conn
+	status int
 
-	serverHost string
-	serverPort int
+	Host string
+	Port int
 
 	userID string
 }
 
 // Connects to the specified server and port.
-func (this *Connection) ConnectToServer(server string, port int) {
-	timeout, _ := time.ParseDuration("15s")
-
-	// Store the connection info so that we can reconnect later if necessary.
-	this.serverHost = server
-	this.serverPort = port
+func (this *Connection) Connect() {
+	timeout, err := time.ParseDuration("15s")
 
 	// Attempt a socket connection to the server.
 	log.Println("Beginning socket connection...")
-	socket, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", server, port), timeout)
-	this.socket = socket
+	this.socket, err = net.DialTimeout("tcp", fmt.Sprintf("%s:%d", this.Host, this.Port), timeout)
 
 	if err != nil {
 		log.Panicf("Connection error: %v\n", err)
@@ -77,6 +80,7 @@ func (this *Connection) Disconnect() {
 	this.sendTransaction("wired.user.disconnect_user", parameters)
 
 	// Close the socket connection.
+	this.status = Disconnected
 	this.socket.Close()
 }
 
@@ -296,8 +300,11 @@ func (this *Connection) processData(data *[]byte) {
 		// Server Info
 		log.Println("Received server info.")
 
-		// If the APNS is connecting by itself then we need to log in.
-		go this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+		// Server info is periodcially sent out while connected, so we need to
+		// check the connection status before logging in.
+		if this.status != Connected {
+			go this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+		}
 	} else if message.Name == "wired.login" {
 		// Login Successful
 		log.Println("Login was successful.")
@@ -329,6 +336,7 @@ func (this *Connection) processData(data *[]byte) {
 				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
 
 			this.JoinChannel("1")
+			this.status = Connected
 		}()
 	} else if message.Name == "wired.send_ping" {
 		// Ping Request
