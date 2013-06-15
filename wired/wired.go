@@ -17,6 +17,7 @@ var (
 
 const (
 	Disconnected = iota
+	Reconnecting
 	Connected
 )
 
@@ -241,9 +242,10 @@ func (this *Connection) readData() {
 		data, err := bufio.NewReader(this.socket).ReadBytes('\r')
 
 		// Catch io.EOF, which happens when the server has disconnected.
-		// TODO: This should attempt to reconnect to the server.
 		if err == io.EOF {
-			log.Panicln("Server disconnected unexpectedly.")
+			log.Println("Server disconnected unexpectedly.")
+			this.status = Reconnecting
+			this.Connect()
 			return
 		}
 
