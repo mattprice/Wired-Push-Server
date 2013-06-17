@@ -45,8 +45,9 @@ func init() {
 }
 
 type Connection struct {
-	socket net.Conn
-	status int
+	socket     net.Conn
+	status     int
+	retryCount int
 
 	Host string
 	Port int
@@ -57,11 +58,16 @@ type Connection struct {
 
 // Connects to the specified server and port.
 func (this *Connection) Connect() {
-	timeout, err := time.ParseDuration("15s")
+	log.Println("Beginning socket connection...")
+
+	// DialTimeout takes an address in the "hostname:port" format
+	// and a timeout of time time.Duration.
+	address := fmt.Sprintf("%s:%d", this.Host, this.Port)
+	timeout := 15 * time.Second
 
 	// Attempt a socket connection to the server.
-	log.Println("Beginning socket connection...")
-	this.socket, err = net.DialTimeout("tcp", fmt.Sprintf("%s:%d", this.Host, this.Port), timeout)
+	socket, err := net.DialTimeout("tcp", address, timeout)
+	this.socket = socket
 
 	if err != nil {
 		log.Panicf("Connection error: %v\n", err)
@@ -78,6 +84,25 @@ func (this *Connection) Connect() {
 
 	// Start listening for server responses.
 	go this.readData()
+}
+
+func (this *Connection) Reconnect() {
+	this.status = Reconnecting
+	this.retryCount++
+	log.Printf("Beginning reconnection attempt %v.", this.retryCount)
+
+	// Stop trying to reconnect after 20 failed attempts.
+	// With a 15 second delay, and a 15 second connection timeout, that ends up
+	// being about 10 minutes of limbo before we give up.
+	if this.retryCount > 20 {
+		this.status = Disconnected
+		log.Panicln("Reconnection attempts failed.")
+	}
+
+	// Set a 15 second delay between reconnections.
+	delay := 15 * time.Second
+	time.Sleep(delay)
+	this.Connect()
 }
 
 // Disconnects from the server.
@@ -244,8 +269,7 @@ func (this *Connection) readData() {
 		// Catch io.EOF, which happens when the server has disconnected.
 		if err == io.EOF {
 			log.Println("Server disconnected unexpectedly.")
-			this.status = Reconnecting
-			this.Connect()
+			go this.Reconnect()
 			return
 		}
 
