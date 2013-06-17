@@ -216,10 +216,10 @@ func (this *Connection) sendClientInformation() {
 
 	parameters := map[string]string{
 		"wired.info.application.name":    "Wired Client",
-		"wired.info.application.version": "2.0",
-		"wired.info.application.build":   "268",
+		"wired.info.application.version": "2.0.1",
+		"wired.info.application.build":   "269",
 		"wired.info.os.name":             "Mac OS X",
-		"wired.info.os.version":          "10.8.3",
+		"wired.info.os.version":          "10.8.4",
 		"wired.info.arch":                "x86_64",
 		"wired.info.supports_rsrc":       "false",
 	}
