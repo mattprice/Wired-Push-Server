@@ -95,19 +95,21 @@ func (this *Connection) Connect() {
 func (this *Connection) Reconnect() {
 	this.status = Reconnecting
 	this.retryCount++
-	log.Printf("Starting reconnection attempt %v.", this.retryCount)
 
 	// Stop trying to reconnect after 20 failed attempts.
 	// With a 15 second delay, and a 15 second connection timeout, that ends up
 	// being about 10 minutes of limbo before we give up.
 	if this.retryCount > 20 {
 		this.status = Disconnected
-		log.Panicln("Reconnection attempts failed.")
+		log.Panicln("*** Unable to reconnect after 20 tries. ***")
 	}
 
-	// Set a 15 second delay between reconnections.
+	// Wait 15 seconds between reconnections.
+	// TODO: Start with a smaller delay and then increase it with each retry.
 	delay := 15 * time.Second
+	log.Printf("Reconnecting in %v. Attempt %v.", delay, this.retryCount)
 	time.Sleep(delay)
+
 	this.Connect()
 }
 
@@ -274,7 +276,7 @@ func (this *Connection) readData() {
 
 		// Catch io.EOF, which happens when the server has disconnected.
 		if err == io.EOF {
-			log.Println("Server disconnected unexpectedly.")
+			log.Println("*** Server disconnected unexpectedly. ***")
 			go this.Reconnect()
 			return
 		}
