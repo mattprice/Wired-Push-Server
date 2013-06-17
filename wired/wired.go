@@ -70,7 +70,9 @@ func (this *Connection) Connect() {
 	this.socket = socket
 
 	if err != nil {
-		log.Panicf("Connection error: %v\n", err)
+		log.Printf("Connection failed: %v\n", err)
+		go this.Reconnect()
+		return
 	}
 
 	// Start sending Wired connection info.
@@ -89,7 +91,7 @@ func (this *Connection) Connect() {
 func (this *Connection) Reconnect() {
 	this.status = Reconnecting
 	this.retryCount++
-	log.Printf("Beginning reconnection attempt %v.", this.retryCount)
+	log.Printf("Starting reconnection attempt %v.", this.retryCount)
 
 	// Stop trying to reconnect after 20 failed attempts.
 	// With a 15 second delay, and a 15 second connection timeout, that ends up
