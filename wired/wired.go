@@ -69,11 +69,15 @@ func (this *Connection) Connect() {
 	socket, err := net.DialTimeout("tcp", address, timeout)
 	this.socket = socket
 
+	// If the connection failed, attempt to reconnect.
 	if err != nil {
 		log.Printf("Connection failed: %v\n", err)
 		go this.Reconnect()
 		return
 	}
+
+	// If the connection was successful, reset the retryCount.
+	this.retryCount = 0
 
 	// Start sending Wired connection info.
 	log.Println("Sending Wired handshake...")
