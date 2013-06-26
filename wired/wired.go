@@ -287,6 +287,13 @@ func (this *Connection) readData() {
 }
 
 func (this *Connection) processData(data *[]byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Recovered from panic! But I haven't decided what to do yet...
+			panic(r)
+		}
+	}()
+
 	type p7Field struct {
 		Name  string `xml:"name,attr"`
 		Value string `xml:",innerxml"`
