@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -59,9 +60,7 @@ type Connection struct {
 func (this *Connection) Connect() {
 	log.Println("Beginning socket connection...")
 
-	// DialTimeout takes an address in the "hostname:port" format
-	// and a timeout of time time.Duration.
-	address := fmt.Sprintf("%s:%d", this.Host, this.Port)
+	address := this.Host + ":" + strconv.Itoa(this.Port)
 	timeout := 15 * time.Second
 
 	// Attempt a socket connection to the server.
