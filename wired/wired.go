@@ -3,7 +3,6 @@ package wired
 import (
 	"bufio"
 	"encoding/xml"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -32,7 +31,7 @@ func init() {
 	}
 
 	for _, version := range supportedVersions {
-		path := fmt.Sprintf("wired/WiredSpec_%s.xml", version)
+		path := "wired/WiredSpec_" + version + ".xml"
 
 		file, err := ioutil.ReadFile(path)
 		if err != nil {
@@ -239,12 +238,12 @@ func (this *Connection) sendClientInformation() {
 func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
 	// Begin translating the transaction message into XML.
 	generatedXML := `<?xml version="1.0" encoding="UTF-8"?>`
-	generatedXML += fmt.Sprintf(`<p7:message name="%s" xmlns:p7="http://www.zankasoftware.com/P7/Message">`, transaction)
+	generatedXML += `<p7:message name="` + transaction + `" xmlns:p7="http://www.zankasoftware.com/P7/Message">`
 
 	// If parameters were sent convert them to XML too.
 	if parameters != nil {
 		for key, value := range parameters[0] {
-			generatedXML += fmt.Sprintf(`<p7:field name="%s">%s</p7:field>`, key, value)
+			generatedXML += `<p7:field name="` + key + `">` + value + `</p7:field>`
 		}
 	}
 
@@ -278,8 +277,6 @@ func (this *Connection) readData() {
 			go this.Reconnect()
 			return
 		}
-
-		// fmt.Printf("%v\n", string(data))
 
 		go this.processData(&data)
 	}
