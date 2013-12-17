@@ -255,7 +255,7 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 	_, err := this.socket.Write([]byte(generatedXML))
 
 	if err != nil {
-		log.Println("Error writing data to socket: %v", err)
+		log.Printf("Error writing data to socket: %v", err)
 	}
 }
 
