@@ -3,6 +3,8 @@ package wired
 import (
 	"bufio"
 	"encoding/xml"
+	"fmt"
+	"github.com/mattprice/Go-APNs"
 	"io/ioutil"
 	"log"
 	"net"
@@ -40,6 +42,12 @@ func init() {
 		}
 
 		specs[version] = string(file)
+	}
+
+	// Connect to the push notification server.
+	err := apns.LoadCertificateFile(false, "certs/sandbox.pem")
+	if err != nil {
+		log.Fatalf("Error connecting to APNs: %v", err)
 	}
 }
 
@@ -369,24 +377,15 @@ func (this *Connection) processData(data *[]byte) {
 		}
 
 		go func() {
-			this.SetNick("Applejack")
-			this.SetStatus("Wired APNs Test")
-			this.SetIcon(`iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAV1BMVEW6X
-				0SuaEWmb0ZwpU3bSEDrPj/sPj7qQD/pQD9evFBWwlFevFBgulBJzVNavlFgulBYwFHxO
-				j7qQD/8MDzqQD/qQD/qPz/6MD3qQD/sPj77KjxgulDqQD8msS8AAAAAG3RSTlMAAwsaF
-				ShAZ1U3WH+lqMri9f7w9dzNua2fhWDaFcMCAAACUklEQVR4XsWW67aiMAyFd0qvwOFmw
-				WJ4/+ecg46OnWOh4po1309rdmJSu4N/S1kVhCM4cYtv2OEAVHMjAFTMxwTWwJrg+JsCB
-				3D1NXXDzC2OUTJX4G8aHFZoHDN3JaDneVYHFNqKuavoMi4rAe8grgqlKwtx7pcbE7Kxk
-				/dBA0SkTssDg0zMLeCsgEu//GEgZKEeAVovERZZzEuKmZDDmAjPbaMYkgIjIQOZFvAfV
-				4As/Ic9QEhPIfcepdDIQqTiB+Czm2QIedDrOXhCLvqlgEI+9kUDNN5Bj0tMkHgTMw3Xx
-				FOYpmDi8os8t5JKayXwk4K5e5jFlhIlDouWuf5tH7VABDVtLbADiY47ARQ1c0uIEMzcU
-				I7zuWshXCOm6NbPNpBaAqC773GJGNEyb3RYhHUuCvhiOH5VLbVbZir9cuUCx2snu6aIg
-				mtHaLjOeG4v+Cqbr8rF+d3N0KuMC95rIghtzudgo9a2VHGZ89adpD6fTn1smfXaVMcu6
-				z/a9z8funLtannfaLTRmY7ln0fI1e0iGr8WJ7Ica8CdomGuSwHI6YUP0LArAJRdJwjKv
-				7JjteVXcp78OM2aUNKzt405AgHQ95DTLGNnks9DSGAjO+3PU2Ql+xUMAvOSxNKua8+EM
-				S1gaHeMEhg2BHZN12BTwO7ZzYhtAUXbV3GQ94Nkh59QqQQhdyWxCbvTGz2MUVGuUdLeV
-				kT4G2mtuX3dG3ocm7c2CiI7h1lHvuXfXwsJyf7GI8LhzWxUwEGFYbUfA+DYTuKtUEoS3
-				seG0Y/BEj6BCP+BX0F2mxFLbI8LAAAAAElFTkSuQmCC`)
+			this.SetNick("Triforce")
+			this.SetStatus("The APNs of Wired")
+			this.SetIcon(`iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAQAAAAAYLlVAAABHElEQVR4A
+				e3XsY1EIRCD4WmCUiiElqYgeqISjmCDFdnbT4Lgnh3/AciGmXj1ClWWr2osX1SNuVxvn
+				n8uX7uDFvPjFlc0v3xBGfPLeb5+c/PhOvaYm/v5+O1up+u3e9yJn0eR48dRhPhBFPX8f
+				gd+fr8Drx/W0etHdfT6QR01fhhFjx9EEYavZ64H4gdR1PqdruP8zQfqB3WE+B2OYsYAp
+				5+/YXyrxm9wfbl+zXnf/Zyn+qXz+vsV5+3368r781Odt99vKO+vfzqvw1dx3oav7rz+f
+				tV5G76G8zp8Nedt+BzO6/CVyvvuU5TX3ac7r8NnVV53n6G87z5Ned59lPfdJ5V/Xp/dR
+				fmn9dndlf9cH7gtC58RGR2czL/69/oD52cjZjGw8cIAAAAASUVORK5CYII=`)
 
 			this.JoinChannel("1")
 			this.status = Connected
@@ -403,6 +402,19 @@ func (this *Connection) processData(data *[]byte) {
 				log.Panicln("Login failed:", "User is banned from this server.")
 			} else {
 				log.Println("*** ERROR:", field.Value, "***")
+			}
+		}
+	} else if message.Name == "wired.chat.user_join" {
+		// User Joined the Channel
+		for _, field := range message.Fields {
+			if field.Name == "wired.user.nick" {
+				// Send a push notification to my iPhone.
+				payload := &apns.Notification{
+					Alert:   fmt.Sprintf("%s has logged into Cunning Giraffe.", field.Value),
+					Sandbox: true,
+				}
+				payload.SetExpiryDuration(24 * time.Hour)
+				payload.SendTo("01b67b3ffc8405c1d9ece77b6e4747b97ecdacb4ce940af1fca260b9a0311d80")
 			}
 		}
 	} else {
