@@ -271,19 +271,22 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 //
 // Until the socket disconnects, we could receive data from the Wired server at
 // any time. To make sure we don't miss any messages, readData will loop forever
-// in its own Goroutine until it recieves data and then immediatley pass it off
-// to another Goroutine for processing.
+// in its own goroutine until it recieves data and then immediately pass it off
+// to another goroutine for processing.
 func (this *Connection) readData() {
+	reader := bufio.NewReader(this.socket)
+
 	for {
 		// log.Println("Attempting to read data from the socket.")
 
-		data, err := bufio.NewReader(this.socket).ReadBytes('\r')
+		data, err := reader.ReadBytes('\r')
 
 		if err != nil {
 			log.Printf("Error reading data from socket: %v", err)
 			log.Println("*** Server disconnected unexpectedly. ***")
+
 			go this.Reconnect()
-			return
+			break
 		}
 
 		go this.processData(&data)
