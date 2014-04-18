@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/mattprice/Wired-APNS/wired"
+	"github.com/mattprice/Wired-Push-Server/wired"
 	"log"
 	"runtime"
 )

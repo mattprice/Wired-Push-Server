@@ -55,6 +55,7 @@ type Connection struct {
 	socket     net.Conn
 	status     int
 	retryCount int
+	lastPing   time.Time
 
 	Host string
 	Port int
@@ -95,6 +96,23 @@ func (this *Connection) Connect() {
 
 	// Start listening for server responses.
 	go this.readData()
+
+	go func() {
+		// Check on the connection every 90 seconds.
+		timer := time.Tick(90 * time.Second)
+		for _ = range timer {
+
+			if this.status == Connected {
+				// If we haven't received a ping request in 60 seconds, send a reply anyway.
+				duration := time.Since(this.lastPing)
+				if duration.Seconds() >= 60 {
+					log.Println("Sending proactive ping reply...")
+					go this.sendPingReply()
+				}
+			}
+
+		}
+	}()
 }
 
 func (this *Connection) Reconnect() {
@@ -241,27 +259,21 @@ func (this *Connection) sendClientInformation() {
 
 // Sends a transaction to the Wired server.
 //
-// All transactions required a transaction name, but the parameters map is optional.
+// All transactions require a transaction name, but the parameters map is optional.
 // Only the first parameters map is read. Multiple parameter maps will be ignored.
 func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
-	// Begin translating the transaction message into XML.
 	generatedXML := `<?xml version="1.0" encoding="UTF-8"?>`
 	generatedXML += `<p7:message name="` + transaction + `" xmlns:p7="http://www.zankasoftware.com/P7/Message">`
 
-	// If parameters were sent convert them to XML too.
 	if parameters != nil {
 		for key, value := range parameters[0] {
 			generatedXML += `<p7:field name="` + key + `">` + value + `</p7:field>`
 		}
 	}
 
-	// End the transaction message.
-	// Line break is the end message signal for the socket.
 	generatedXML += "</p7:message>\r\n"
 
-	// Write the data to the socket.
 	_, err := this.socket.Write([]byte(generatedXML))
-
 	if err != nil {
 		log.Printf("Error writing data to socket: %v", err)
 	}
@@ -280,7 +292,6 @@ func (this *Connection) readData() {
 		// log.Println("Attempting to read data from the socket.")
 
 		data, err := reader.ReadBytes('\r')
-
 		if err != nil {
 			log.Printf("Error reading data from socket: %v", err)
 			log.Println("*** Server disconnected unexpectedly. ***")
@@ -394,6 +405,8 @@ func (this *Connection) processData(data *[]byte) {
 			this.status = Connected
 		}()
 	} else if message.Name == "wired.send_ping" {
+		this.lastPing = time.Now()
+
 		// Ping Request
 		go this.sendPingReply()
 	} else if message.Name == "wired.error" {
