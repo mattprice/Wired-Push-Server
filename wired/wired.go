@@ -196,6 +196,16 @@ func (this *Connection) SetIcon(icon string) {
 	this.sendTransaction("wired.user.set_icon", parameters)
 }
 
+// Sets a user as idle.
+func (this *Connection) SetIdle() {
+	log.Println("Attempting to set user as idle...")
+
+	parameters := map[string]string{
+		"wired.user.idle": "YES",
+	}
+	this.sendTransaction("wired.user.set_idle", parameters)
+}
+
 // Joins the specified channel.
 //
 // Under most circumstances users will only ever join channel 1, the public channel.
@@ -403,6 +413,9 @@ func (this *Connection) processData(data *[]byte) {
 
 			this.JoinChannel("1")
 			this.status = Connected
+
+			// TODO: Check to see if the user should actually be considered idle.
+			this.SetIdle()
 		}()
 	} else if message.Name == "wired.send_ping" {
 		this.lastPing = time.Now()
