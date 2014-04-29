@@ -1,3 +1,13 @@
+// Package wired provides methods for connecting to a Wired server.
+//
+// To initiate a connection, create a new Connection and then call its
+// Connection method:
+//
+//	connection := &wired.Connection{
+//		Host: "127.0.0.1",
+//		Port: 4871,
+//	}
+//	connection.Connect()
 package wired
 
 import (
@@ -13,18 +23,19 @@ import (
 )
 
 var (
-	specs map[string]string = make(map[string]string)
+	specs = make(map[string]string)
 )
 
+// Possible statuses of the connection.
 const (
 	Disconnected = iota
 	Reconnecting
 	Connected
 )
 
-// There are a few I/O operations we should perform while the server is starting so
-// that they aren't repeated for each connection we receive. For instance, reading
-// in the Wired specification file to speed things up.
+// There are a few I/O operations we should perform while the server is starting
+// so they aren't repeated for each connection we receive. For instance, reading
+// in the Wired specification files.
 func init() {
 	supportedVersions := []string{
 		"2.0b51",
@@ -51,6 +62,7 @@ func init() {
 	}
 }
 
+// Connection represents a connection to a Wired server.
 type Connection struct {
 	socket     net.Conn
 	status     int
@@ -64,26 +76,26 @@ type Connection struct {
 	userID  string
 }
 
-// Connects to the specified server and port.
-func (this *Connection) Connect() {
+// Connect connects to the server.
+func (conn *Connection) Connect() {
 	log.Println("Beginning socket connection...")
 
-	address := this.Host + ":" + strconv.Itoa(this.Port)
+	address := conn.Host + ":" + strconv.Itoa(conn.Port)
 	timeout := 15 * time.Second
 
 	// Attempt a socket connection to the server.
 	socket, err := net.DialTimeout("tcp", address, timeout)
-	this.socket = socket
+	conn.socket = socket
 
 	// If the connection failed, attempt to reconnect.
 	if err != nil {
 		log.Printf("Connection failed: %v\n", err)
-		go this.Reconnect()
+		go conn.Reconnect()
 		return
 	}
 
 	// If the connection was successful, reset the retryCount.
-	this.retryCount = 0
+	conn.retryCount = 0
 
 	// Start sending Wired connection info.
 	log.Println("Sending Wired handshake...")
@@ -92,22 +104,24 @@ func (this *Connection) Connect() {
 		"p7.handshake.protocol.name":    "Wired",
 		"p7.handshake.protocol.version": "2.0",
 	}
-	this.sendTransaction("p7.handshake.client_handshake", parameters)
+	conn.sendTransaction("p7.handshake.client_handshake", parameters)
 
 	// Start listening for server responses.
-	go this.readData()
+	go conn.readData()
 
+	// BUG(mattprice): This goroutine is never closed when the server disconnects.
+	// On reconnection, another goroutine is spawned.
 	go func() {
 		// Check on the connection every 90 seconds.
 		timer := time.Tick(90 * time.Second)
 		for _ = range timer {
 
-			if this.status == Connected {
+			if conn.status == Connected {
 				// If we haven't received a ping request in 60 seconds, send a reply anyway.
-				duration := time.Since(this.lastPing)
+				duration := time.Since(conn.lastPing)
 				if duration.Seconds() >= 60 {
 					log.Println("Sending proactive ping reply...")
-					go this.sendPingReply()
+					go conn.sendPingReply()
 				}
 			}
 
@@ -115,47 +129,48 @@ func (this *Connection) Connect() {
 	}()
 }
 
-func (this *Connection) Reconnect() {
-	this.status = Reconnecting
-	this.retryCount++
+// Reconnect reconnects to the server.
+func (conn *Connection) Reconnect() {
+	conn.status = Reconnecting
+	conn.retryCount++
 
 	// Stop trying to reconnect after 20 failed attempts.
 	// With a 15 second delay, and a 15 second connection timeout, that ends up
 	// being about 10 minutes of limbo before we give up.
-	if this.retryCount > 20 {
-		this.status = Disconnected
+	if conn.retryCount > 20 {
+		conn.status = Disconnected
 		log.Panicln("*** Unable to reconnect after 20 tries. ***")
 	}
 
 	// Wait 15 seconds between reconnections.
 	// TODO: Start with a smaller delay and then increase it with each retry.
 	delay := 15 * time.Second
-	log.Printf("Reconnecting in %v. Attempt %v.", delay, this.retryCount)
+	log.Printf("Reconnecting in %v. Attempt %v.", delay, conn.retryCount)
 	time.Sleep(delay)
 
-	this.Connect()
+	conn.Connect()
 }
 
-// Disconnects from the server.
-func (this *Connection) Disconnect() {
+// Disconnect disconnects from the server.
+func (conn *Connection) Disconnect() {
 	log.Println("Disconnecting from server...")
 
 	// Alert the Wired server that we're disconnecting.
 	parameters := map[string]string{
-		"wired.user.id":                 this.userID,
+		"wired.user.id":                 conn.userID,
 		"wired.user.disconnect_message": "",
 	}
-	this.sendTransaction("wired.user.disconnect_user", parameters)
+	conn.sendTransaction("wired.user.disconnect_user", parameters)
 
 	// Close the socket connection.
-	this.status = Disconnected
-	this.socket.Close()
+	conn.status = Disconnected
+	conn.socket.Close()
 }
 
-// Sends a user's login information to the Wired server.
+// SendLogin sends the user's login information to the Wired server.
 //
 // The password must be converted to a SHA1 digest before sending it to this function.
-func (this *Connection) SendLogin(user, password string) {
+func (conn *Connection) SendLogin(user, password string) {
 	log.Println("Sending login information...")
 
 	// Send the user login information to the Wired server.
@@ -163,96 +178,96 @@ func (this *Connection) SendLogin(user, password string) {
 		"wired.user.login":    user,
 		"wired.user.password": password,
 	}
-	this.sendTransaction("wired.send_login", parameters)
+	conn.sendTransaction("wired.send_login", parameters)
 }
 
-// Sets a user's nickname.
-func (this *Connection) SetNick(nick string) {
+// SetNick sets the user's nickname.
+func (conn *Connection) SetNick(nick string) {
 	log.Println("Attempting to change nick...")
 
 	parameters := map[string]string{
 		"wired.user.nick": nick,
 	}
-	this.sendTransaction("wired.user.set_nick", parameters)
+	conn.sendTransaction("wired.user.set_nick", parameters)
 }
 
-// Sets a user's status.
-func (this *Connection) SetStatus(status string) {
+// SetStatus sets the user's status.
+func (conn *Connection) SetStatus(status string) {
 	log.Println("Attempting to change status...")
 
 	parameters := map[string]string{
 		"wired.user.status": status,
 	}
-	this.sendTransaction("wired.user.set_status", parameters)
+	conn.sendTransaction("wired.user.set_status", parameters)
 }
 
-// Sets a user's avatar.
-func (this *Connection) SetIcon(icon string) {
+// SetIcon sets the user's avatar.
+func (conn *Connection) SetIcon(icon string) {
 	log.Println("Attempting to change icon...")
 
 	parameters := map[string]string{
 		"wired.user.icon": icon,
 	}
-	this.sendTransaction("wired.user.set_icon", parameters)
+	conn.sendTransaction("wired.user.set_icon", parameters)
 }
 
-// Sets a user as idle.
-func (this *Connection) SetIdle() {
+// SetIdle sets the user as idle.
+func (conn *Connection) SetIdle() {
 	log.Println("Attempting to set user as idle...")
 
 	parameters := map[string]string{
 		"wired.user.idle": "YES",
 	}
-	this.sendTransaction("wired.user.set_idle", parameters)
+	conn.sendTransaction("wired.user.set_idle", parameters)
 }
 
-// Joins the specified channel.
+// JoinChannel joins the specified channel.
 //
 // Under most circumstances users will only ever join channel 1, the public channel.
-func (this *Connection) JoinChannel(channel string) {
+func (conn *Connection) JoinChannel(channel string) {
 	log.Printf("Attempting to join channel %s...\n", channel)
 
 	// Attempt to join the channel.
 	parameters := map[string]string{
 		"wired.chat.id": channel,
 	}
-	this.sendTransaction("wired.chat.join_chat", parameters)
+	conn.sendTransaction("wired.chat.join_chat", parameters)
 }
 
-// Sends an acknowledgement to the Wired server.
-func (this *Connection) sendAcknowledgement() {
+// sendAcknowledgement sends an acknowledgement to the Wired server.
+func (conn *Connection) sendAcknowledgement() {
 	log.Println("Sending acknowledgement...")
 
-	this.sendTransaction("p7.handshake.acknowledge")
+	conn.sendTransaction("p7.handshake.acknowledge")
 }
 
-// Replies to a ping request from the Wired server.
-func (this *Connection) sendPingReply() {
+// sendPingReply replies to a ping request from the Wired server.
+func (conn *Connection) sendPingReply() {
 	// log.Println("Attempting to send ping reply...")
 
-	this.sendTransaction("wired.ping")
+	conn.sendTransaction("wired.ping")
 }
 
-//  Responds to a compatibility check from the server.
+// sendCompatibilityCheck responds to a compatibility check from the server.
 //
-//  Reads in the WiredSpec XML file and sends it to the server. Wired requires that
-//  certain characters be encoded before sending. To save processing time the XML
-//  should be pre-encoded. To save bandwidth the documentation lines should be removed.
-func (this *Connection) sendCompatibilityCheck() {
+// Reads in the WiredSpec XML file and sends it to the server. Wired requires that
+// certain characters be encoded before sending. To save processing time the XML
+// should be pre-encoded. To save bandwidth the documentation lines should be removed.
+func (conn *Connection) sendCompatibilityCheck() {
 	log.Println("Sending compatibility check...")
 
 	parameters := map[string]string{
-		"p7.compatibility_check.specification": specs[this.version],
+		"p7.compatibility_check.specification": specs[conn.version],
 	}
-	this.sendTransaction("p7.compatibility_check.specification", parameters)
+	conn.sendTransaction("p7.compatibility_check.specification", parameters)
 }
 
-// Sends information about the Wired client to the server.
+// sendClientInformation sends client information to the server.
 //
 // For now this is reporting information about the newest known Mac build.
 // In the future, this should report the same information as the Wired version
 // that's connecting to the Push server.
-func (this *Connection) sendClientInformation() {
+func (conn *Connection) sendClientInformation() {
 	log.Println("Sending client information...")
 
 	parameters := map[string]string{
@@ -264,14 +279,14 @@ func (this *Connection) sendClientInformation() {
 		"wired.info.arch":                "x86_64",
 		"wired.info.supports_rsrc":       "false",
 	}
-	this.sendTransaction("wired.client_info", parameters)
+	conn.sendTransaction("wired.client_info", parameters)
 }
 
-// Sends a transaction to the Wired server.
+// sendTransaction sends a transaction to the Wired server.
 //
 // All transactions require a transaction name, but the parameters map is optional.
 // Only the first parameters map is read. Multiple parameter maps will be ignored.
-func (this *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
+func (conn *Connection) sendTransaction(transaction string, parameters ...map[string]string) {
 	generatedXML := `<?xml version="1.0" encoding="UTF-8"?>`
 	generatedXML += `<p7:message name="` + transaction + `" xmlns:p7="http://www.zankasoftware.com/P7/Message">`
 
@@ -283,20 +298,20 @@ func (this *Connection) sendTransaction(transaction string, parameters ...map[st
 
 	generatedXML += "</p7:message>\r\n"
 
-	_, err := this.socket.Write([]byte(generatedXML))
+	_, err := conn.socket.Write([]byte(generatedXML))
 	if err != nil {
 		log.Printf("Error writing data to socket: %v", err)
 	}
 }
 
-// Reads data from the socket and then passes it off for processing.
+// readData listens for data from the socket and then passes it off for processing.
 //
 // Until the socket disconnects, we could receive data from the Wired server at
 // any time. To make sure we don't miss any messages, readData will loop forever
 // in its own goroutine until it recieves data and then immediately pass it off
 // to another goroutine for processing.
-func (this *Connection) readData() {
-	reader := bufio.NewReader(this.socket)
+func (conn *Connection) readData() {
+	reader := bufio.NewReader(conn.socket)
 
 	for {
 		// log.Println("Attempting to read data from the socket.")
@@ -306,15 +321,16 @@ func (this *Connection) readData() {
 			log.Printf("Error reading data from socket: %v", err)
 			log.Println("*** Server disconnected unexpectedly. ***")
 
-			go this.Reconnect()
+			go conn.Reconnect()
 			break
 		}
 
-		go this.processData(&data)
+		go conn.processData(&data)
 	}
 }
 
-func (this *Connection) processData(data *[]byte) {
+// processData parses and acts on messages sent by the Wired server.
+func (conn *Connection) processData(data *[]byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Recovered from panic! But I haven't decided what to do yet...
@@ -344,7 +360,7 @@ func (this *Connection) processData(data *[]byte) {
 		// Server Handshake
 		log.Println("Received handshake.")
 
-		go this.sendAcknowledgement()
+		go conn.sendAcknowledgement()
 
 		// Just incase the server sends fields out of order, we don't send the
 		// compatibility check until after processing everything, when we're certain
@@ -352,7 +368,7 @@ func (this *Connection) processData(data *[]byte) {
 		sendCheck := false
 		for _, field := range message.Fields {
 			if field.Name == "p7.handshake.protocol.version" {
-				this.version = field.Value
+				conn.version = field.Value
 			} else if field.Name == "p7.handshake.compatibility_check" {
 				if field.Value == "1" {
 					sendCheck = true
@@ -361,9 +377,9 @@ func (this *Connection) processData(data *[]byte) {
 		}
 
 		if sendCheck {
-			go this.sendCompatibilityCheck()
+			go conn.sendCompatibilityCheck()
 		} else {
-			go this.sendClientInformation()
+			go conn.sendClientInformation()
 		}
 	} else if message.Name == "p7.compatibility_check.status" {
 		// Compatibility Check
@@ -372,7 +388,7 @@ func (this *Connection) processData(data *[]byte) {
 		for _, field := range message.Fields {
 			if field.Name == "p7.compatibility_check.status" {
 				if field.Value == "1" {
-					go this.sendClientInformation()
+					go conn.sendClientInformation()
 				} else {
 					// TODO: Panic will crash the entire server right now.
 					// We need to do some defer()'s and recover()'s in the main Goroutine
@@ -387,8 +403,8 @@ func (this *Connection) processData(data *[]byte) {
 
 		// Server info is periodcially sent out while connected, so we need to
 		// check the connection status before logging in.
-		if this.status != Connected {
-			go this.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+		if conn.status != Connected {
+			go conn.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
 		}
 	} else if message.Name == "wired.login" {
 		// Login Successful
@@ -396,14 +412,14 @@ func (this *Connection) processData(data *[]byte) {
 
 		for _, field := range message.Fields {
 			if field.Name == "wired.user.id" {
-				this.userID = field.Value
+				conn.userID = field.Value
 			}
 		}
 
 		go func() {
-			this.SetNick("Triforce")
-			this.SetStatus("The APNs of Wired")
-			this.SetIcon(`iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAQAAAAAYLlVAAABHElEQVR4A
+			conn.SetNick("Triforce")
+			conn.SetStatus("The APNs of Wired")
+			conn.SetIcon(`iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAQAAAAAYLlVAAABHElEQVR4A
 				e3XsY1EIRCD4WmCUiiElqYgeqISjmCDFdnbT4Lgnh3/AciGmXj1ClWWr2osX1SNuVxvn
 				n8uX7uDFvPjFlc0v3xBGfPLeb5+c/PhOvaYm/v5+O1up+u3e9yJn0eR48dRhPhBFPX8f
 				gd+fr8Drx/W0etHdfT6QR01fhhFjx9EEYavZ64H4gdR1PqdruP8zQfqB3WE+B2OYsYAp
@@ -411,17 +427,17 @@ func (this *Connection) processData(data *[]byte) {
 				tV5G76G8zp8Nedt+BzO6/CVyvvuU5TX3ac7r8NnVV53n6G87z5Ned59lPfdJ5V/Xp/dR
 				fmn9dndlf9cH7gtC58RGR2czL/69/oD52cjZjGw8cIAAAAASUVORK5CYII=`)
 
-			this.JoinChannel("1")
-			this.status = Connected
+			conn.JoinChannel("1")
+			conn.status = Connected
 
 			// TODO: Check to see if the user should actually be considered idle.
-			this.SetIdle()
+			conn.SetIdle()
 		}()
 	} else if message.Name == "wired.send_ping" {
-		this.lastPing = time.Now()
+		conn.lastPing = time.Now()
 
 		// Ping Request
-		go this.sendPingReply()
+		go conn.sendPingReply()
 	} else if message.Name == "wired.error" {
 		// Wired Errors
 		for _, field := range message.Fields {
