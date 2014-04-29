@@ -1,13 +1,13 @@
 // Package wired provides methods for connecting to a Wired server.
 //
 // To initiate a connection, create a new Connection and then call its
-// Connection method:
+// Connect method:
 //
-//	connection := &wired.Connection{
+//	c := &wired.Connection{
 //		Host: "127.0.0.1",
 //		Port: 4871,
 //	}
-//	connection.Connect()
+//	c.Connect()
 package wired
 
 import (
@@ -63,6 +63,9 @@ func init() {
 }
 
 // Connection represents a connection to a Wired server.
+//
+// Connections will automatically reconnect if they are unexpectedly disconnected.
+// There is currently no way to disable this feature.
 type Connection struct {
 	socket     net.Conn
 	status     int
@@ -390,8 +393,8 @@ func (conn *Connection) processData(data *[]byte) {
 				if field.Value == "1" {
 					go conn.sendClientInformation()
 				} else {
-					// TODO: Panic will crash the entire server right now.
-					// We need to do some defer()'s and recover()'s in the main Goroutine
+					// BUG(mattprice): Panic will crash the entire server right now.
+					// We need to do some defer()'s and recover()'s in the main goroutine
 					// so that only this Connection closes.
 					log.Panic("Compatibility mismatch.")
 				}
