@@ -1,5 +1,5 @@
-# Wired Push Notification Service
-An experimental Apple Push Notification service for the Mobile Wired iOS app.
+# Wired Push Server
+An experimental push notification server for the [Mobile Wired](https://github.com/mattprice/Mobile-Wired) iOS app built using the [wired](http://godoc.org/github.com/mattprice/Wired-Push-Server/wired) and [Go APNs](https://github.com/mattprice/Go-APNs) packages.
 
 ## License (MIT)
 Copyright (c) 2013 Matthew Price, http://mattprice.me/ <br>
