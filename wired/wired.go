@@ -111,25 +111,6 @@ func (conn *Connection) Connect() {
 
 	// Start listening for server responses.
 	go conn.readData()
-
-	// BUG(mattprice): This goroutine is never closed when the server disconnects.
-	// On reconnection, another goroutine is spawned.
-	go func() {
-		// Check on the connection every 90 seconds.
-		timer := time.Tick(90 * time.Second)
-		for _ = range timer {
-
-			if conn.status == Connected {
-				// If we haven't received a ping request in 60 seconds, send a reply anyway.
-				duration := time.Since(conn.lastPing)
-				if duration.Seconds() >= 60 {
-					log.Println("Sending proactive ping reply...")
-					go conn.sendPingReply()
-				}
-			}
-
-		}
-	}()
 }
 
 // Reconnect reconnects to the server.
@@ -435,6 +416,25 @@ func (conn *Connection) processData(data *[]byte) {
 
 			// TODO: Check to see if the user should actually be considered idle.
 			conn.SetIdle()
+
+			// Check on the connection every 90 seconds.
+			go func() {
+				timer := time.Tick(90 * time.Second)
+				for _ = range timer {
+					// If we've disconnected, exit the goroutine.
+					if conn.status != Connected {
+						break
+					}
+
+					// If we haven't received a ping request in 60 seconds, send a reply anyway.
+					duration := time.Since(conn.lastPing)
+					if duration.Seconds() >= 60 {
+						log.Println("Sending proactive ping reply...")
+						go conn.sendPingReply()
+					}
+				}
+			}()
+
 		}()
 	} else if message.Name == "wired.send_ping" {
 		conn.lastPing = time.Now()
