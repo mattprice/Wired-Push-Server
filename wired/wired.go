@@ -311,7 +311,7 @@ func (conn *Connection) sendTransaction(transaction string, parameters ...map[st
 //
 // Until the socket disconnects, we could receive data from the Wired server at
 // any time. To make sure we don't miss any messages, readData will loop forever
-// in its own goroutine until it recieves data and then immediately pass it off
+// in its own goroutine until it receives data and then immediately pass it off
 // to another goroutine for processing.
 func (conn *Connection) readData() {
 	reader := bufio.NewReader(conn.socket)
@@ -365,7 +365,7 @@ func (conn *Connection) processData(data *[]byte) {
 
 		go conn.sendAcknowledgement()
 
-		// Just incase the server sends fields out of order, we don't send the
+		// Just in case the server sends fields out of order, we don't send the
 		// compatibility check until after processing everything, when we're certain
 		// we have the protocol version figured out.
 		sendCheck := false
@@ -404,7 +404,7 @@ func (conn *Connection) processData(data *[]byte) {
 		// Server Info
 		log.Println("Received server info.")
 
-		// Server info is periodcially sent out while connected, so we need to
+		// Server info is periodically sent out while connected, so we need to
 		// check the connection status before logging in.
 		if conn.status != Connected {
 			go conn.SendLogin("guest", "da39a3ee5e6b4b0d3255bfef95601890afd80709")
