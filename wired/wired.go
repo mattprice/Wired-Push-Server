@@ -1,4 +1,17 @@
 // Package wired provides methods for connecting to a Wired server.
+//
+// To initiate a connection, create a new Connection and then call its
+// Connect method:
+//
+//	c := &wired.Connection{
+//		Host: "127.0.0.1",
+//		Port: 4871,
+//	}
+//	c.Connect()
+//
+// Or use the shorthand Connect() function:
+//
+//	c := wired.Connect("127.0.0.1", 4871)
 package wired
 
 import (
@@ -73,8 +86,6 @@ type Connection struct {
 // Connect connects to a server on a given host and port.
 //
 // This is shorthand for the Connection.Connect() function.
-//
-//	c := wired.Connect("127.0.0.1", 4871)
 func Connect(host string, port int) *Connection {
 	conn := Connection{
 		Host: host,
@@ -86,12 +97,6 @@ func Connect(host string, port int) *Connection {
 }
 
 // Connect connects to the server.
-//
-//	c := &wired.Connection{
-//		Host: "127.0.0.1",
-//		Port: 4871,
-//	}
-//	c.Connect()
 func (conn *Connection) Connect() {
 	conn.connect()
 
