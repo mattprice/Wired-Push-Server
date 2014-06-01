@@ -1,13 +1,4 @@
 // Package wired provides methods for connecting to a Wired server.
-//
-// To initiate a connection, create a new Connection and then call its
-// Connect method:
-//
-//	c := &wired.Connection{
-//		Host: "127.0.0.1",
-//		Port: 4871,
-//	}
-//	c.Connect()
 package wired
 
 import (
@@ -79,8 +70,51 @@ type Connection struct {
 	userID  string
 }
 
+// Connect connects to a server on a given host and port.
+//
+// This is shorthand for the Connection.Connect() function.
+//
+//	c := wired.Connect("127.0.0.1", 4871)
+func Connect(host string, port int) *Connection {
+	conn := Connection{
+		Host: host,
+		Port: port,
+	}
+	conn.Connect()
+
+	return &conn
+}
+
 // Connect connects to the server.
+//
+//	c := &wired.Connection{
+//		Host: "127.0.0.1",
+//		Port: 4871,
+//	}
+//	c.Connect()
 func (conn *Connection) Connect() {
+	conn.connect()
+
+	// Check on the connection every 90 seconds.
+	go func() {
+		timer := time.Tick(90 * time.Second)
+		for _ = range timer {
+			// If we've disconnected, skip this loop.
+			if conn.status != Connected {
+				continue
+			}
+
+			// If we haven't received a ping request in 60 seconds, send a reply anyway.
+			duration := time.Since(conn.lastPing)
+			if duration.Seconds() >= 60 {
+				log.Println("Sending proactive ping reply...")
+				go conn.sendPingReply()
+			}
+		}
+	}()
+}
+
+func (conn *Connection) connect() {
 	log.Println("Beginning socket connection...")
 
 	address := conn.Host + ":" + strconv.Itoa(conn.Port)
@@ -416,25 +450,6 @@ func (conn *Connection) processData(data *[]byte) {
 
 			// TODO: Check to see if the user should actually be considered idle.
 			conn.SetIdle()
-
-			// Check on the connection every 90 seconds.
-			go func() {
-				timer := time.Tick(90 * time.Second)
-				for _ = range timer {
-					// If we've disconnected, exit the goroutine.
-					if conn.status != Connected {
-						break
-					}
-
-					// If we haven't received a ping request in 60 seconds, send a reply anyway.
-					duration := time.Since(conn.lastPing)
-					if duration.Seconds() >= 60 {
-						log.Println("Sending proactive ping reply...")
-						go conn.sendPingReply()
-					}
-				}
-			}()
-
 		}()
 	} else if message.Name == "wired.send_ping" {
 		conn.lastPing = time.Now()

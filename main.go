@@ -13,16 +13,12 @@ func main() {
 	// Tell Go to use the maximum number of CPU threads.
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	connection := &wired.Connection{
-		Host: "chat.embercode.com",
-		Port: 2359,
-	}
-	connection.Connect()
+	conn := wired.Connect("chat.embercode.com", 2359)
 
 	// Wait for user input before disconnecting from the server.
 	var input string
 	fmt.Scanln(&input)
-	connection.Disconnect()
+	conn.Disconnect()
 
 	log.Println("*** Exiting server ***")
 }
